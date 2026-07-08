@@ -23,6 +23,7 @@
 .globl precision_set
 .globl skipped_set
 .globl audio_set
+.globl region_set
 
 .globl update_menu
 
@@ -35,6 +36,7 @@ precision_set: .byte 2 << 2
 skipped_set: .byte 0 << 2
 audio_set: .byte 1 << 2
 underclk_set: .byte 1 << 2
+region_set: .byte 0 << 2
 left_str: .string "<"
 right_str: .string ">"
 
@@ -46,6 +48,7 @@ precision_str: .string "FRAME PRECISION"
 skipped_str: .string "FRAMES SKIPPED"
 audio_str: .string "AUDIO OUTPUT"
 underclk_str: .string "APU UNDERCLOCK"
+region_str: .string "REGION"
 
 .align 4
 on_str: .string "     ON "
@@ -62,17 +65,20 @@ zero_str: .string "      0 "
 one_str: .string "      1 "
 two_str: .string "      2 "
 three_str: .string "      3 "
+ntsc_str: .string "   NTSC "
+pal_str: .string "    PAL "
 
 .align 4
-menu_items: .word counter_str, layer_str, precision_str, skipped_str, audio_str, underclk_str, 0
-menu_opts: .word toggle_opts, layer_opts, precision_opts, skipped_opts, toggle_opts, toggle_opts
-menu_sets: .word counter_set, layer_set, precision_set, skipped_set, audio_set, underclk_set
+menu_items: .word counter_str, layer_str, precision_str, skipped_str, audio_str, underclk_str, region_str, 0
+menu_opts: .word toggle_opts, layer_opts, precision_opts, skipped_opts, toggle_opts, toggle_opts, region_opts
+menu_sets: .word counter_set, layer_set, precision_set, skipped_set, audio_set, underclk_set, region_set
 
 .align 4
 toggle_opts: .word off_str, on_str, 0
 layer_opts: .word back_str, front_str, 0
 precision_opts: .word lower_str, low_str, medium_str, high_str, higher_str, max_str, 0
 skipped_opts: .word zero_str, one_str, two_str, three_str, 0
+region_opts: .word ntsc_str, pal_str, 0
 
 .text
 .set noreorder
@@ -279,12 +285,24 @@ menu_close:
     li t2, APU_CYCLE
     srl t0, t0, 2
     sll t2, t2, t0
-    beq t1, t2, menu_return
+    beq t1, t2, check_region
     nop
 
     // Update the clock and invalidate the JIT buffer if changed
     sb t2, apu_clock
     li t0, ROM_BUFFER
     sw t0, jit_pointer
+
+check_region:
+    // Check if the region setting changed
+    lbu t0, region_set
+    lbu t1, vi_region
+    srl t0, t0, 2
+    beq t1, t0, menu_return
+    nop
+
+    // Update the region setting
+    sb t0, vi_region
     b menu_return
     nop
+
