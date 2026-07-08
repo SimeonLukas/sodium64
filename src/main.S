@@ -38,6 +38,7 @@ fps_display: .byte 0
 skip_native: .byte 0
 skip_emulate: .byte 0
 frame_count: .byte 0
+vi_region: .byte 0
 
 .section .boot
 .set noreorder
@@ -69,7 +70,7 @@ clear_vram:
     bne t0, t1, clear_vram
     addi t0, t0, 8
 
-    // Initialize the VI to display a 16-bit 256x224 framebuffer
+    // Initialize the VI with region-dependent settings
     lui t0, 0xA440 // VI register upper address
     li t1, 0x00000202 // 16-bit pixel format, no anti-aliasing
     sw t1, 0x0000(t0) // VI_CONTROL
@@ -83,6 +84,38 @@ clear_vram:
     sw t1, 0x0010(t0) // VI_V_CURRENT
     li t1, 0x03E52239 // Various timing parameters
     sw t1, 0x0014(t0) // VI_BURST
+
+    // Load region setting (0=NTSC, 1=PAL)
+    la t2, vi_region
+    lbu t2, (t2)
+
+    // Set video timing based on region
+    beqz t2, set_ntsc
+    nop
+
+set_pal:
+    // PAL timing (312 lines, 50 Hz)
+    li t1, 0x00000271 // Lines per frame (PAL: 625/2 = 312.5 ≈ 0x271)
+    sw t1, 0x0018(t0) // VI_V_SYNC
+    li t1, 0x00000C48 // Quarter-pixels per line (PAL adjusted)
+    sw t1, 0x001C(t0) // VI_H_SYNC
+    li t1, 0x0C480C48 // Same as above
+    sw t1, 0x0020(t0) // VI_H_SYNC_LEAP
+    li t1, 0x006C02EC // Active horizontal pixel range
+    sw t1, 0x0024(t0) // VI_H_VIDEO
+    li t1, 0x0024020F // Active vertical pixel range (PAL: more lines)
+    sw t1, 0x0028(t0) // VI_V_VIDEO
+    li t1, 0x000E0204 // Vertical color burst range
+    sw t1, 0x002C(t0) // VI_V_BURST
+    li t1, 0x000001C0 // Horizontal scale (10-bit fraction, 280/640)
+    sw t1, 0x0030(t0) // VI_X_SCALE
+    li t1, 0x00000400 // Vertical scale (10-bit fraction, 240/240)
+    sw t1, 0x0034(t0) // VI_Y_SCALE
+    b init_ai
+    nop
+
+set_ntsc:
+    // NTSC timing (262 lines, 60 Hz) - default
     li t1, 0x0000020D // Lines per frame (NTSC standard)
     sw t1, 0x0018(t0) // VI_V_SYNC
     li t1, 0x00000C15 // Quarter-pixels per line
@@ -100,6 +133,7 @@ clear_vram:
     li t1, 0x00000400 // Vertical scale (10-bit fraction, 240/240)
     sw t1, 0x0034(t0) // VI_Y_SCALE
 
+init_ai:
     // Initialize the AI to output 16-bit samples at the DSP rate
     lui t0, 0xA450 // AI register upper address
     li t1, 0x00000001 // DMA enable
@@ -324,3 +358,4 @@ loop:
     // Wait until the system resets
     b loop
     nop
+
